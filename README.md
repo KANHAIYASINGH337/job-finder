@@ -1,6 +1,6 @@
 #Remote Job Finder
 
-🚀 A modern web application for discovering remote job opportunities through a clean, responsive, and user-friendly interface.
+A modern web application for discovering remote job opportunities through a clean, responsive, and user-friendly interface.
 
 🌐 Live Demo: https://remote-jobs-2.vercel.app/
 
