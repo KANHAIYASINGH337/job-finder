@@ -47,23 +47,24 @@
   --scrollbar-track: #f1f5f9;
 }
 
+/* FIX 1: Dark mode background changed to pure black as requested in issue */
 [data-theme="dark"] {
-  --bg: #0f172a;
-  --bg-card: #1e293b;
-  --bg-header: #1e293b;
-  --bg-filter: #1e293b;
-  --bg-input: #0f172a;
+  --bg: #000000;
+  --bg-card: #111111;
+  --bg-header: #0a0a0a;
+  --bg-filter: #111111;
+  --bg-input: #000000;
   --bg-tag: #1e3a8a;
-  --bg-skeleton: #334155;
-  --bg-skeleton-shine: #475569;
+  --bg-skeleton: #222222;
+  --bg-skeleton-shine: #333333;
 
   --text: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --text-tag: #93c5fd;
 
-  --border: #334155;
-  --border-card: #334155;
+  --border: #222222;
+  --border-card: #222222;
 
   --primary: #6366f1;
   --primary-light: #1e1b4b;
@@ -78,15 +79,15 @@
 
   --tab-active-bg: #6366f1;
   --tab-active-text: #ffffff;
-  --tab-bg: #1e293b;
+  --tab-bg: #111111;
   --tab-text: #94a3b8;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-header: 0 1px 0 #334155;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.6);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.8);
+  --shadow-header: 0 1px 0 #222222;
 
-  --scrollbar-thumb: #475569;
-  --scrollbar-track: #1e293b;
+  --scrollbar-thumb: #333333;
+  --scrollbar-track: #000000;
 }
 
 [data-theme="midnight"] {
@@ -206,12 +207,18 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  /* FIX 2: Prevent header overflow on small screens */
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .header-brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* FIX 2: Allow brand to shrink if needed */
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .brand-icon {
@@ -232,6 +239,10 @@ body {
   color: var(--text);
   letter-spacing: -0.02em;
   line-height: 1.2;
+  /* FIX 2: Prevent text overflow */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .brand-sub {
@@ -625,7 +636,8 @@ body {
 
 .jobs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  /* FIX 2: Better responsive grid - smaller minmax for mobile */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
 }
 
@@ -910,11 +922,17 @@ body {
 @media (max-width: 640px) {
   .header-inner {
     padding: 0 14px;
-    gap: 10px;
+    gap: 8px;
+    height: 56px;
   }
 
   .brand-sub { display: none; }
   .last-updated { display: none; }
+
+  /* FIX 2: Hide refresh text on mobile, show only icon */
+  .btn-refresh span {
+    display: none;
+  }
 
   .main {
     padding: 0 14px 40px;
@@ -934,6 +952,7 @@ body {
     font-size: 1.1rem;
   }
 
+  /* FIX 2: Single column on mobile */
   .jobs-grid {
     grid-template-columns: 1fr;
   }
@@ -956,5 +975,31 @@ body {
     overflow-x: auto;
     flex-wrap: nowrap;
     padding-bottom: 4px;
+  }
+
+  /* FIX 2: Tabs full width on mobile */
+  .tabs {
+    width: 100%;
+  }
+
+  .tab-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .header-inner {
+    padding: 0 10px;
+  }
+
+  .brand-title {
+    font-size: 0.95rem;
+  }
+
+  .theme-btn {
+    padding: 4px 6px;
   }
 }
