@@ -16,30 +16,38 @@ const LOCATION_RESTRICTION_PATTERNS = [
   /authorized\s*to\s*work/i,
   /canada\s*only/i,
   /australia\s*only/i,
+  /north\s*america\s*only/i,
+  /latin\s*america\s*only/i,
+  /apac\s*only/i,
+  /timezone/i,
 ];
 
-function detectLocationRestriction(text: string): boolean {
-  return LOCATION_RESTRICTION_PATTERNS.some((p) => p.test(text));
+function detectLocationRestriction(location: string = "", text: string = ""): boolean {
+  const combined = (location + " " + text).toLowerCase();
+  if (/\b(worldwide|anywhere|everywhere|global)\b/i.test(location) && !LOCATION_RESTRICTION_PATTERNS.some((p) => p.test(location))) {
+    return false;
+  }
+  return LOCATION_RESTRICTION_PATTERNS.some((p) => p.test(combined));
 }
 
-function detectExperienceLevel(title: string, desc: string): string {
+function detectExperienceLevel(title: string = "", desc: string = ""): string {
   const text = (title + " " + desc).toLowerCase();
-  if (/\b(senior|sr\.|lead|principal|staff|architect|head of)\b/.test(text)) return "senior";
-  if (/\b(junior|jr\.|entry|fresher|graduate|intern|0-2|0 to 2)\b/.test(text)) return "entry";
-  if (/\b(mid|middle|intermediate|2-5|3-5)\b/.test(text)) return "mid";
+  if (/\b(senior|sr\.|lead|principal|staff|architect|head of|vp|director|manager)\b/.test(text)) return "senior";
+  if (/\b(junior|jr\.|entry|fresher|graduate|intern|associate|0-2|0 to 2)\b/.test(text)) return "entry";
+  if (/\b(mid|middle|intermediate|2-5|3-5|mid-level|midlevel)\b/.test(text)) return "mid";
   return "mid";
 }
 
-function detectCategory(title: string, tags: string[]): string {
+function detectCategory(title: string = "", tags: string[] = []): string {
   const text = (title + " " + tags.join(" ")).toLowerCase();
-  if (/\b(devops|infra|sre|kubernetes|docker|ci\/cd|cloud|aws|gcp|azure|platform)\b/.test(text)) return "devops";
-  if (/\b(design|ui|ux|figma|illustrat|graphic|brand|visual|product designer)\b/.test(text)) return "design";
-  if (/\b(marketing|seo|growth|content market|social media|ads|copywrite|email market)\b/.test(text)) return "marketing";
-  if (/\b(product manager|pm |product owner|roadmap)\b/.test(text)) return "product";
-  if (/\b(data|ml|machine learning|ai|analytics|scientist|analyst|nlp|llm|etl|pipeline)\b/.test(text)) return "data";
-  if (/\b(support|customer success|account manager|help desk|customer service)\b/.test(text)) return "support";
-  if (/\b(writer|writing|content|editorial|copywriter|journalist|technical writer|docs)\b/.test(text)) return "writing";
-  if (/\b(engineer|developer|dev|software|backend|frontend|fullstack|full-stack|web|mobile|ios|android|react|node|python|java|rust|go|php|ruby)\b/.test(text)) return "engineering";
+  if (/\b(devops|infra|infrastructure|sre|kubernetes|docker|ci\/cd|cloud|aws|gcp|azure|platform)\b/.test(text)) return "devops";
+  if (/\b(design|ui|ux|figma|illustrat|graphic|brand|visual|product designer|animator)\b/.test(text)) return "design";
+  if (/\b(marketing|seo|growth|content market|social media|ads|copywrite|email market|sem)\b/.test(text)) return "marketing";
+  if (/\b(product manager|pm|product owner|roadmap|scrum master)\b/.test(text)) return "product";
+  if (/\b(data|ml|machine learning|ai|analytics|scientist|analyst|nlp|llm|etl|pipeline|big data)\b/.test(text)) return "data";
+  if (/\b(support|customer success|account manager|help desk|customer service|client manager)\b/.test(text)) return "support";
+  if (/\b(writer|writing|content|editorial|copywriter|journalist|technical writer|docs|documentation)\b/.test(text)) return "writing";
+  if (/\b(engineer|developer|dev|software|backend|frontend|fullstack|full-stack|web|mobile|ios|android|react|node|python|java|rust|go|php|ruby|c\+\+|typescript)\b/.test(text)) return "engineering";
   return "engineering";
 }
 
@@ -47,41 +55,106 @@ function parseSalary(salaryStr?: string): { min?: number; max?: number } {
   if (!salaryStr) return {};
   const nums = salaryStr.match(/\d[\d,]*/g);
   if (!nums) return {};
-  const parsed = nums.map((n) => parseInt(n.replace(/,/g, ""), 10)).filter((n) => n > 0);
+  const parsed = nums
+    .map((n) => parseInt(n.replace(/,/g, ""), 10))
+    .filter((n) => !isNaN(n) && n > 0);
   if (parsed.length === 0) return {};
-  if (parsed.length === 1) return { min: parsed[0] };
-  return { min: Math.min(...parsed), max: Math.max(...parsed) };
+  const normalized = parsed.map((n) => (n > 0 && n < 1000 ? n * 1000 : n));
+  if (normalized.length === 1) return { min: normalized[0] };
+  return { min: Math.min(...normalized), max: Math.max(...normalized) };
+}
+
+function parseDate(val: any): Date {
+  if (!val) return new Date();
+  if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
+
+  if (typeof val === "number" || (typeof val === "string" && /^\d+$/.test(val.trim()))) {
+    const num = Number(val);
+    if (!isNaN(num)) {
+      const ms = num < 1e11 ? num * 1000 : num;
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  if (typeof val === "string") {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  return new Date();
+}
+
+async function fetchJsonWithFallback(url: string, options?: RequestInit): Promise<any> {
+  try {
+    const res = await fetch(url, options);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Direct fetch failed (CORS or network issue)
+  }
+
+  try {
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {}
+
+  try {
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {}
+
+  throw new Error(`Failed to fetch from ${url}`);
 }
 
 async function fetchRemoteOK(): Promise<Job[]> {
-  const res = await fetch("https://remoteok.com/api", {
+  const data = await fetchJsonWithFallback("https://remoteok.com/api", {
     headers: { "User-Agent": "RemoteJobAggregator/1.0" },
   });
-  if (!res.ok) throw new Error("RemoteOK fetch failed");
-  const data = await res.json();
+
+  if (!Array.isArray(data)) return [];
+
   const jobs: Job[] = [];
   for (const item of data) {
-    if (!item.position || !item.company) continue;
-    const text = (item.position + " " + (item.description || "") + " " + (item.location || ""));
-    const isRestricted = detectLocationRestriction(text);
+    if (!item || typeof item !== "object" || !item.position || !item.company) continue;
+    const text = `${item.position} ${item.description || ""} ${item.location || ""}`;
+    const locationStr = item.location || "";
+    const isRestricted = detectLocationRestriction(locationStr, text);
     const tags: string[] = Array.isArray(item.tags) ? item.tags.slice(0, 8) : [];
-    const salaryStr = item.salary_min && item.salary_max
-      ? `$${item.salary_min.toLocaleString()} - $${item.salary_max.toLocaleString()}`
-      : undefined;
+    
+    let salaryStr: string | undefined = undefined;
+    let minSal: number | undefined = item.salary_min ? Number(item.salary_min) : undefined;
+    let maxSal: number | undefined = item.salary_max ? Number(item.salary_max) : undefined;
+    
+    if (minSal && maxSal) {
+      salaryStr = `$${minSal.toLocaleString()} - $${maxSal.toLocaleString()}`;
+    } else if (minSal) {
+      salaryStr = `$${minSal.toLocaleString()}+`;
+    }
+
+    const postedAt = parseDate(item.date || item.epoch);
+
     jobs.push({
-      id: `rok-${item.id || item.slug}`,
+      id: `rok-${item.id || item.slug || Math.random().toString(36).substring(2, 9)}`,
       title: item.position,
       company: item.company,
       companyLogo: item.company_logo,
-      url: item.url || `https://remoteok.com/l/${item.slug}`,
-      postedAt: item.date ? new Date(item.date * 1000) : new Date(),
+      url: item.url || (item.slug ? `https://remoteok.com/l/${item.slug}` : "https://remoteok.com"),
+      postedAt,
       salary: salaryStr,
-      salaryMin: item.salary_min ? Number(item.salary_min) : undefined,
-      salaryMax: item.salary_max ? Number(item.salary_max) : undefined,
+      salaryMin: minSal,
+      salaryMax: maxSal,
       tags,
       description: item.description || "",
       category: detectCategory(item.position, tags),
-      location: item.location,
+      location: locationStr,
       isLocationRestricted: isRestricted,
       isTrulyRemote: !isRestricted,
       source: "remoteok",
@@ -91,28 +164,33 @@ async function fetchRemoteOK(): Promise<Job[]> {
 }
 
 async function fetchRemotive(): Promise<Job[]> {
-  const res = await fetch("https://remotive.com/api/remote-jobs?limit=200");
-  if (!res.ok) throw new Error("Remotive fetch failed");
-  const data = await res.json();
+  const data = await fetchJsonWithFallback("https://remotive.com/api/remote-jobs?limit=200");
+  const jobList = data && Array.isArray(data.jobs) ? data.jobs : [];
   const jobs: Job[] = [];
-  for (const item of data.jobs || []) {
-    const text = (item.title + " " + (item.description || "") + " " + (item.candidate_required_location || ""));
-    const isRestricted = detectLocationRestriction(text);
-    const tags: string[] = (item.tags || []).slice(0, 8);
+
+  for (const item of jobList) {
+    if (!item || !item.title || !item.company_name) continue;
+    const locationStr = item.candidate_required_location || "";
+    const text = `${item.title} ${item.description || ""} ${locationStr}`;
+    const isRestricted = detectLocationRestriction(locationStr, text);
+    const tags: string[] = Array.isArray(item.tags) ? item.tags.slice(0, 8) : [];
+    const parsedSal = parseSalary(item.salary);
+    const postedAt = parseDate(item.publication_date || item.date);
+
     jobs.push({
       id: `rem-${item.id}`,
       title: item.title,
       company: item.company_name,
       companyLogo: item.company_logo_url,
       url: item.url,
-      postedAt: item.publication_date ? new Date(item.publication_date) : new Date(),
+      postedAt,
       salary: item.salary || undefined,
-      salaryMin: parseSalary(item.salary).min,
-      salaryMax: parseSalary(item.salary).max,
+      salaryMin: parsedSal.min,
+      salaryMax: parsedSal.max,
       tags,
       description: item.description || "",
       category: detectCategory(item.title, tags),
-      location: item.candidate_required_location,
+      location: locationStr,
       isLocationRestricted: isRestricted,
       isTrulyRemote: !isRestricted,
       source: "remotive",
@@ -125,7 +203,14 @@ function deduplicateJobs(jobs: Job[]): Job[] {
   const seen = new Map<string, Job>();
   for (const job of jobs) {
     const key = `${job.title.toLowerCase().trim()}|${job.company.toLowerCase().trim()}`;
-    if (!seen.has(key)) seen.set(key, job);
+    if (!seen.has(key)) {
+      seen.set(key, job);
+    } else {
+      const existing = seen.get(key)!;
+      if ((!existing.salary && job.salary) || (!existing.companyLogo && job.companyLogo)) {
+        seen.set(key, job);
+      }
+    }
   }
   return Array.from(seen.values());
 }
@@ -142,14 +227,16 @@ function getTimeThreshold(filter: TimeFilter): Date | null {
 export function countByTimeFilter(jobs: Job[], filter: TimeFilter): number {
   const threshold = getTimeThreshold(filter);
   if (!threshold) return jobs.length;
-  return jobs.filter((j) => j.postedAt >= threshold!).length;
+  return jobs.filter((j) => j.postedAt instanceof Date && !isNaN(j.postedAt.getTime()) && j.postedAt >= threshold).length;
 }
 
 export function applyFilters(jobs: Job[], filters: Filters): Job[] {
   let result = [...jobs];
 
   const threshold = getTimeThreshold(filters.timeFilter);
-  if (threshold) result = result.filter((j) => j.postedAt >= threshold);
+  if (threshold) {
+    result = result.filter((j) => j.postedAt instanceof Date && !isNaN(j.postedAt.getTime()) && j.postedAt >= threshold);
+  }
 
   if (filters.search.trim()) {
     const q = filters.search.toLowerCase();
@@ -170,7 +257,7 @@ export function applyFilters(jobs: Job[], filters: Filters): Job[] {
 
   if (filters.salary !== "any") {
     if (filters.salary === "listed-only") {
-      result = result.filter((j) => !!j.salary);
+      result = result.filter((j) => !!j.salary || j.salaryMin !== undefined);
     } else if (filters.salary === "0-50k") {
       result = result.filter((j) => j.salaryMin !== undefined && j.salaryMin < 50000);
     } else if (filters.salary === "50k-100k") {
@@ -189,9 +276,17 @@ export function applyFilters(jobs: Job[], filters: Filters): Job[] {
   } else if (filters.sort === "oldest") {
     result.sort((a, b) => a.postedAt.getTime() - b.postedAt.getTime());
   } else if (filters.sort === "salary-high") {
-    result.sort((a, b) => (b.salaryMax ?? b.salaryMin ?? 0) - (a.salaryMax ?? a.salaryMin ?? 0));
+    result.sort((a, b) => {
+      const valA = a.salaryMax ?? a.salaryMin ?? -1;
+      const valB = b.salaryMax ?? b.salaryMin ?? -1;
+      return valB - valA;
+    });
   } else if (filters.sort === "salary-low") {
-    result.sort((a, b) => (a.salaryMin ?? Infinity) - (b.salaryMin ?? Infinity));
+    result.sort((a, b) => {
+      const valA = a.salaryMin ?? a.salaryMax ?? Number.MAX_SAFE_INTEGER;
+      const valB = b.salaryMin ?? b.salaryMax ?? Number.MAX_SAFE_INTEGER;
+      return valA - valB;
+    });
   }
 
   return result;
@@ -231,11 +326,17 @@ export function useJobs(filters: Filters) {
 
     const [rok, rem] = await Promise.allSettled([fetchRemoteOK(), fetchRemotive()]);
 
-    if (rok.status === "fulfilled") results.push(...rok.value);
-    else newErrors.push("RemoteOK: Could not load (using Remotive data only)");
+    if (rok.status === "fulfilled") {
+      results.push(...rok.value);
+    } else {
+      newErrors.push("RemoteOK: Could not load (using Remotive data only)");
+    }
 
-    if (rem.status === "fulfilled") results.push(...rem.value);
-    else newErrors.push("Remotive: Could not load (using RemoteOK data only)");
+    if (rem.status === "fulfilled") {
+      results.push(...rem.value);
+    } else {
+      newErrors.push("Remotive: Could not load (using RemoteOK data only)");
+    }
 
     const deduped = deduplicateJobs(results);
     deduped.sort((a, b) => b.postedAt.getTime() - a.postedAt.getTime());
