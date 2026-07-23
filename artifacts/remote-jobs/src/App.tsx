@@ -8,15 +8,13 @@ import { SkeletonCard } from "./components/SkeletonCard";
 import type { Filters, Theme } from "./types";
 
 const DEFAULT_FILTERS: Filters = {
-  timeFilter: "48h",
+  timeFilter: "all",
   search: "",
   experience: "any",
   salary: "any",
   category: "all",
   sort: "newest",
 };
-
-const TIME_FALLBACK_ORDER = ["48h", "7d", "all"] as const;
 
 function timeAgoShort(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000 / 60);
@@ -51,20 +49,6 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
   }, [theme]);
-
-  useEffect(() => {
-    if (isLoading || allJobs.length === 0) return;
-    const currentCount = timeCounts[filters.timeFilter === "all" ? "all" : filters.timeFilter] ?? 0;
-    if (currentCount === 0 && filters.timeFilter !== "all") {
-      for (const fallback of TIME_FALLBACK_ORDER) {
-        const count = timeCounts[fallback] ?? 0;
-        if (count > 0) {
-          setFilters((prev) => ({ ...prev, timeFilter: fallback }));
-          break;
-        }
-      }
-    }
-  }, [isLoading, allJobs.length, timeCounts, filters.timeFilter]);
 
   const updateFilters = useCallback((partial: Partial<Filters>) => {
     setFilters((prev) => ({ ...prev, ...partial }));
