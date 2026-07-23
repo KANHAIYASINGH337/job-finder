@@ -13,6 +13,7 @@ interface DiscoveredComponent {
   importPath: string;
 }
 
+
 export function mockupPreviewPlugin(): Plugin {
   let root = "";
   let currentSource = "";
