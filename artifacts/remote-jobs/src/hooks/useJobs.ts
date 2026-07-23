@@ -64,6 +64,59 @@ function parseSalary(salaryStr?: string): { min?: number; max?: number } {
   return { min: Math.min(...normalized), max: Math.max(...normalized) };
 }
 
+function extractSalaryInfo(
+  salaryField?: string,
+  minField?: any,
+  maxField?: any,
+  descriptionText: string = ""
+): { salary?: string; salaryMin?: number; salaryMax?: number } {
+  let min = minField ? Number(minField) : undefined;
+  let max = maxField ? Number(maxField) : undefined;
+  if (min === 0) min = undefined;
+  if (max === 0) max = undefined;
+
+  if (min && max) {
+    return {
+      salary: `$${min.toLocaleString()} - $${max.toLocaleString()}`,
+      salaryMin: min,
+      salaryMax: max,
+    };
+  }
+  if (min) {
+    return {
+      salary: `$${min.toLocaleString()}+`,
+      salaryMin: min,
+      salaryMax: undefined,
+    };
+  }
+
+  if (salaryField && salaryField.trim() && !/competitive|doe|negotiable|depends/i.test(salaryField)) {
+    const parsed = parseSalary(salaryField);
+    return {
+      salary: salaryField.trim(),
+      salaryMin: parsed.min,
+      salaryMax: parsed.max,
+    };
+  }
+
+  // Scan description for salary patterns e.g. $80,000 - $120,000 or $90k
+  const salaryRegex = /\$(\d{2,3}(?:,\d{3})*|\d{2,3}k)\s*(?:-|to)?\s*\$?(\d{2,3}(?:,\d{3})*|\d{2,3}k)?\s*(?:usd|\/year|\/yr|per year)?\b/gi;
+  const matches = descriptionText.match(salaryRegex);
+  if (matches && matches.length > 0) {
+    const foundStr = matches[0].trim();
+    const parsed = parseSalary(foundStr);
+    if (parsed.min || parsed.max) {
+      return {
+        salary: foundStr,
+        salaryMin: parsed.min,
+        salaryMax: parsed.max,
+      };
+    }
+  }
+
+  return {};
+}
+
 function parseDate(val: any): Date {
   if (!val) return new Date();
   if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
@@ -92,7 +145,7 @@ async function fetchJsonWithFallback(url: string, options?: RequestInit): Promis
       return await res.json();
     }
   } catch {
-    // Direct fetch failed (CORS or network issue)
+    // direct fetch failed
   }
 
   try {
@@ -129,16 +182,7 @@ async function fetchRemoteOK(): Promise<Job[]> {
     const isRestricted = detectLocationRestriction(locationStr, text);
     const tags: string[] = Array.isArray(item.tags) ? item.tags.slice(0, 8) : [];
     
-    let salaryStr: string | undefined = undefined;
-    let minSal: number | undefined = item.salary_min ? Number(item.salary_min) : undefined;
-    let maxSal: number | undefined = item.salary_max ? Number(item.salary_max) : undefined;
-    
-    if (minSal && maxSal) {
-      salaryStr = `$${minSal.toLocaleString()} - $${maxSal.toLocaleString()}`;
-    } else if (minSal) {
-      salaryStr = `$${minSal.toLocaleString()}+`;
-    }
-
+    const salaryInfo = extractSalaryInfo(item.salary, item.salary_min, item.salary_max, item.description || "");
     const postedAt = parseDate(item.date || item.epoch);
 
     jobs.push({
@@ -148,9 +192,9 @@ async function fetchRemoteOK(): Promise<Job[]> {
       companyLogo: item.company_logo,
       url: item.url || (item.slug ? `https://remoteok.com/l/${item.slug}` : "https://remoteok.com"),
       postedAt,
-      salary: salaryStr,
-      salaryMin: minSal,
-      salaryMax: maxSal,
+      salary: salaryInfo.salary,
+      salaryMin: salaryInfo.salaryMin,
+      salaryMax: salaryInfo.salaryMax,
       tags,
       description: item.description || "",
       category: detectCategory(item.position, tags),
@@ -174,7 +218,8 @@ async function fetchRemotive(): Promise<Job[]> {
     const text = `${item.title} ${item.description || ""} ${locationStr}`;
     const isRestricted = detectLocationRestriction(locationStr, text);
     const tags: string[] = Array.isArray(item.tags) ? item.tags.slice(0, 8) : [];
-    const parsedSal = parseSalary(item.salary);
+    
+    const salaryInfo = extractSalaryInfo(item.salary, undefined, undefined, item.description || "");
     const postedAt = parseDate(item.publication_date || item.date);
 
     jobs.push({
@@ -184,9 +229,9 @@ async function fetchRemotive(): Promise<Job[]> {
       companyLogo: item.company_logo_url,
       url: item.url,
       postedAt,
-      salary: item.salary || undefined,
-      salaryMin: parsedSal.min,
-      salaryMax: parsedSal.max,
+      salary: salaryInfo.salary,
+      salaryMin: salaryInfo.salaryMin,
+      salaryMax: salaryInfo.salaryMax,
       tags,
       description: item.description || "",
       category: detectCategory(item.title, tags),
